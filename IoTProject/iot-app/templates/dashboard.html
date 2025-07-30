@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2 class="mb-4">📊 IoT Dashboard</h2>
+
+<ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="sensors-tab" data-bs-toggle="tab" data-bs-target="#sensors" type="button"
+                role="tab">Sensors
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="controls-tab" data-bs-toggle="tab" data-bs-target="#controls" type="button"
+                role="tab">Controls
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab">
+            Statistics
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content mt-4">
+    <div class="tab-pane fade show active" id="sensors" role="tabpanel">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-thermometer-half"></i> Sensor Data
+            </div>
+            <div class="card-body table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                    <tr>
+                        <th>⏰ Timestamp</th>
+                        <th>🌡 Temperature (°C)</th>
+                        <th>💧 Air Humidity (%)</th>
+                        <th>🌱 Soil Moisture (%)</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for sensor in sensors %}
+                    <tr>
+                        <td>{{ sensor.timestamp }}</td>
+                        <td>{{ sensor.temperature }}</td>
+                        <td>{{ sensor.humidity_air }}</td>
+                        <td>{{ sensor.humidity_soil }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="controls" role="tabpanel">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-toggle-on"></i> Device Control
+            </div>
+            <div class="card-body">
+                <!-- Select device -->
+                <div class="mb-3">
+                    <label for="deviceSelect" class="form-label">Select Device:</label>
+                    <select id="deviceSelect" class="form-select" onchange="onDeviceChange()">
+                        <option value="__none__" selected>-- Choose a device --</option>
+                        {% for d in controls %}
+                        <option value="{{ device }}">{{ d.device|capitalize }} - {{ 'On' if d.status else 'Off'}}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Dynamic control buttons -->
+                <div id="controlButtons" class="mb-4 d-none">
+                    <div class="btn-group">
+                        <button id="btn-on" class="btn btn-outline-success" onclick="toggleDevice(true)">
+                            <i class="bi bi-power"></i> Turn On
+                        </button>
+                        <button id="btn-off" class="btn btn-outline-danger" onclick="toggleDevice(false)">
+                            <i class="bi bi-power"></i> Turn Off
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Control history -->
+                <h5 class="mt-4">🕘 Device Status</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="controlHistoryTable">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Device</th>
+                            <th>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for control in controls %}
+                        <tr data-device="{{ control.device|lower }}">
+                            <td>{{ control.timestamp }}</td>
+                            <td>{{ control.device }}</td>
+                            <td>
+                            <span class="badge {% if control.status %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ 'On' if control.status else 'Off'}}
+                            </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="tab-pane fade" id="stats" role="tabpanel">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h5 class="card-title">🌡 Average Temperature</h5>
+                        <p class="card-text fs-4">{{ avg_data.avg_temp | round(2) }} °C</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h5 class="card-title">💧 Average Air Humidity</h5>
+                        <p class="card-text fs-4">{{ avg_data.avg_humidity_air | round(2) }} %</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h5 class="card-title">🌱 Average Soil Moisture</h5>
+                        <p class="card-text fs-4">{{ avg_data.avg_humidity_soil | round(2) }} %</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    let selectedDevice = null;
+
+    function onDeviceChange() {
+        const select = document.getElementById("deviceSelect");
+        selectedDevice = select.value;
+
+        // control btn
+        document.getElementById("controlButtons").classList.remove("d-none");
+        if (selectedDevice === "__none__") {
+            controlButtons.classList.add("d-none");
+        } else {
+            controlButtons.classList.remove("d-none");
+        }
+    }
+
+    function toggleDevice(state) {
+        if (selectedDevice === "__none__") return;
+        // API
+        controlDevice(selectedDevice, state);
+    }
+
+    async function controlDevice(device, state) {
+        const response = await fetch('/api/control', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ device, state })
+        });
+        if (response.ok) {
+            window.location.reload();
+        } else {
+            alert('Lỗi khi điều khiển thiết bị');
+        }
+    }
+</script>
+{% endblock %}
