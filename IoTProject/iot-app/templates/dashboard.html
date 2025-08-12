@@ -40,7 +40,7 @@
                     <tbody>
                     {% for sensor in sensors %}
                     <tr>
-                        <td>{{ sensor.timestamp }}</td>
+                        <td class="timestamp" data-iso="{{ sensor.timestamp }}">{{ sensor.timestamp }}</td>
                         <td>{{ sensor.temperature }}</td>
                         <td>{{ sensor.humidity_air }}</td>
                         <td>{{ sensor.humidity_soil }}</td>
@@ -63,9 +63,9 @@
                     <label for="deviceSelect" class="form-label">Select Device:</label>
                     <select id="deviceSelect" class="form-select" onchange="onDeviceChange()">
                         <option value="__none__" selected>-- Choose a device --</option>
-                        {% for d in controls %}
-                        <option value="{{ d.device|lower }}">{{ d.device|capitalize }} - {{ 'On' if d.status else 'Off'
-                            }}
+                        {% for d in ['fan', 'light', 'pump'] %}
+                        {% set latest = controls|selectattr('device', 'equalto', d|capitalize)|first %}
+                        <option value="{{ d }}">{{ d|capitalize }} - {{ 'On' if latest and latest.status else 'Off' }}
                         </option>
                         {% endfor %}
                     </select>
@@ -84,7 +84,7 @@
                 </div>
 
                 <!-- Control history -->
-                <h5 class="mt-4">🕘 Device Status</h5>
+                <h5 class="mt-4">🕘 Device Status History (Last 24 Hours)</h5>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover" id="controlHistoryTable">
                         <thead class="table-light">
@@ -97,8 +97,8 @@
                         <tbody>
                         {% for control in controls %}
                         <tr data-device="{{ control.device|lower }}">
-                            <td>{{ control.timestamp or 'N/A' }}</td>
-                            <td>{{ control.device|capitalize }}</td>
+                            <td class="timestamp" data-iso="{{ control.timestamp }}">{{ control.timestamp }}</td>
+                            <td>{{ control.device }}</td>
                             <td>
                                 <span class="badge {% if control.status %}bg-success{% else %}bg-danger{% endif %}">
                                     {{ 'On' if control.status else 'Off' }}
@@ -144,6 +144,30 @@
 </div>
 
 <script>
+    // Chuyển đổi timestamp ISO sang định dạng địa phương
+    function formatTimestamp(isoString) {
+        if (!isoString) return 'N/A';
+        const normalizedIsoString = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+        const date = new Date(normalizedIsoString);
+        return date.toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    // Cập nhật tất cả timestamp khi tải trang
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.timestamp').forEach(element => {
+            const isoTime = element.getAttribute('data-iso');
+            element.textContent = formatTimestamp(isoTime);
+        });
+    });
+
     let selectedDevice = null;
 
     function onDeviceChange() {
@@ -173,20 +197,22 @@
                 body: JSON.stringify({
                     device: selectedDevice,
                     state: state,
-                    mode: 'manual' // Gửi mode=manual để đồng bộ với ESP32
                 })
             });
 
             const result = await response.json();
             if (response.ok) {
-                // Cập nhật trạng thái trên giao diện mà không reload
-                const rows = document.querySelectorAll(`#controlHistoryTable tr[data-device="${selectedDevice}"]`);
-                if (rows.length > 0) {
-                    const badge = rows[0].querySelector('.badge');
-                    badge.textContent = state ? 'On' : 'Off';
-                    badge.className = `badge ${state ? 'bg-success' : 'bg-danger'}`;
-                    rows[0].querySelector('td:first-child').textContent = new Date().toLocaleString();
-                }
+                // Cập nhật bảng lịch sử
+                const tbody = document.querySelector('#controlHistoryTable tbody');
+                const newRow = document.createElement('tr');
+                newRow.setAttribute('data-device', selectedDevice);
+                newRow.innerHTML = `
+                    <td class="timestamp" data-iso="${result.data.timestamp}">${formatTimestamp(result.data.timestamp)}</td>
+                    <td>${selectedDevice.charAt(0).toUpperCase() + selectedDevice.slice(1)}</td>
+                    <td><span class="badge ${state ? 'bg-success' : 'bg-danger'}">${state ? 'On' : 'Off'}</span></td>
+                `;
+                tbody.insertBefore(newRow, tbody.firstChild);
+
                 // Cập nhật select option
                 const selectOption = document.querySelector(`#deviceSelect option[value="${selectedDevice}"]`);
                 selectOption.textContent = `${selectedDevice.charAt(0).toUpperCase() + selectedDevice.slice(1)} - ${state ? 'On' : 'Off'}`;
