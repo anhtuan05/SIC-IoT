@@ -67,7 +67,6 @@ def control_device():
 
         device = data.get('device')
         state = data.get('state')
-        mode = data.get('mode', 'manual')  # Default to manual mode
 
         if device not in ['light', 'fan', 'pump']:
             return jsonify({'error': 'Invalid device name'}), 400
@@ -92,7 +91,6 @@ def control_device():
             'data': {
                 'device': device,
                 'state': state,
-                'mode': mode,
                 'timestamp': control.timestamp.isoformat()
             }
         }), 200

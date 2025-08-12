@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_required, current_user
 from models.user import User, db
@@ -16,19 +18,19 @@ def index():
             'temperature': sensor.temperature,
             'humidity_air': sensor.humidity_air,
             'humidity_soil': sensor.humidity_soil,
-            'timestamp': sensor.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': sensor.timestamp.isoformat()
         } for sensor in sensors
     ]
 
-    devices = ['fan', 'light', 'pump']
-    controls_data = []
-    for device in devices:
-        latest_control = Control.query.filter_by(device=device).order_by(Control.timestamp.desc()).first()
-        controls_data.append({
-            'device': device.capitalize(),
-            'status': latest_control.state if latest_control else False,
-            'timestamp': latest_control.timestamp.strftime('%Y-%m-%d %H:%M:%S') if latest_control else None
-        })
+    time_threshold = datetime.utcnow() - timedelta(hours=24)
+    controls = Control.query.filter(Control.timestamp >= time_threshold).order_by(Control.timestamp.desc()).all()
+    controls_data = [
+        {
+            'device': control.device.capitalize(),
+            'status': control.state,
+            'timestamp': control.timestamp.isoformat() if control.timestamp else None
+        } for control in controls
+    ]
 
     avg_data = {
         'avg_temp': 0.0,
