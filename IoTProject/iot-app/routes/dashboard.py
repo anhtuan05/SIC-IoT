@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_required, current_user
 from models.user import User, db
+from models.sensor import Sensor, db
+from models.control import Control, db
 
 
 bp = Blueprint('dashboard', __name__)
@@ -8,22 +10,42 @@ bp = Blueprint('dashboard', __name__)
 @bp.route('/dashboard')
 @login_required
 def index():
-    # Dữ liệu mẫu
-    sensors = [
-        {'temperature': 25.5, 'humidity_air': 60, 'humidity_soil': 45, 'timestamp': '2025-07-29 20:00'},
-        {'temperature': 26.0, 'humidity_air': 62, 'humidity_soil': 47, 'timestamp': '2025-07-29 20:10'},
+    sensors = Sensor.query.order_by(Sensor.timestamp.desc()).limit(10).all()
+    sensors_data = [
+        {
+            'temperature': sensor.temperature,
+            'humidity_air': sensor.humidity_air,
+            'humidity_soil': sensor.humidity_soil,
+            'timestamp': sensor.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        } for sensor in sensors
     ]
-    controls = [
-        {'device': 'Fan', 'status': True, 'timestamp': '2025-07-29 20:00'},
-        {'device': 'Light', 'status': False, 'timestamp': '2025-07-29 20:05'},
-        {'device': 'Pump', 'status': True, 'timestamp': '2025-07-29 20:05'},
-    ]
+
+    devices = ['fan', 'light', 'pump']
+    controls_data = []
+    for device in devices:
+        latest_control = Control.query.filter_by(device=device).order_by(Control.timestamp.desc()).first()
+        controls_data.append({
+            'device': device.capitalize(),
+            'status': latest_control.state if latest_control else False,
+            'timestamp': latest_control.timestamp.strftime('%Y-%m-%d %H:%M:%S') if latest_control else None
+        })
+
     avg_data = {
-        'avg_temp': 25.75,
-        'avg_humidity_air': 61.0,
-        'avg_humidity_soil': 46.0
+        'avg_temp': 0.0,
+        'avg_humidity_air': 0.0,
+        'avg_humidity_soil': 0.0
     }
-    return render_template('dashboard.html', sensors=sensors, controls=controls, avg_data=avg_data)
+    if sensors:
+        avg_temp = db.session.query(db.func.avg(Sensor.temperature)).scalar() or 0.0
+        avg_humidity_air = db.session.query(db.func.avg(Sensor.humidity_air)).scalar() or 0.0
+        avg_humidity_soil = db.session.query(db.func.avg(Sensor.humidity_soil)).scalar() or 0.0
+        avg_data = {
+            'avg_temp': round(float(avg_temp), 2),
+            'avg_humidity_air': round(float(avg_humidity_air), 2),
+            'avg_humidity_soil': round(float(avg_humidity_soil), 2)
+        }
+
+    return render_template('dashboard.html', sensors=sensors_data, controls=controls_data, avg_data=avg_data)
 
 
 @bp.route('/users', methods=['GET', 'POST'])
