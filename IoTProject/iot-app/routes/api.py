@@ -59,7 +59,6 @@ def receive_sensor_data():
 
 
 @bp.route('/api/control', methods=['POST'])
-@login_required
 def control_device():
     try:
         data = request.get_json()
