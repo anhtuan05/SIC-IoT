@@ -17,7 +17,6 @@ def index():
         {'device': 'Fan', 'status': True, 'timestamp': '2025-07-29 20:00'},
         {'device': 'Light', 'status': False, 'timestamp': '2025-07-29 20:05'},
         {'device': 'Pump', 'status': True, 'timestamp': '2025-07-29 20:05'},
-        {'device': 'Pump2', 'status': False, 'timestamp': '2025-07-29 20:05'},
     ]
     avg_data = {
         'avg_temp': 25.75,
