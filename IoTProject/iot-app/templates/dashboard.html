@@ -64,7 +64,8 @@
                     <select id="deviceSelect" class="form-select" onchange="onDeviceChange()">
                         <option value="__none__" selected>-- Choose a device --</option>
                         {% for d in controls %}
-                        <option value="{{ device }}">{{ d.device|capitalize }} - {{ 'On' if d.status else 'Off'}}
+                        <option value="{{ d.device|lower }}">{{ d.device|capitalize }} - {{ 'On' if d.status else 'Off'
+                            }}
                         </option>
                         {% endfor %}
                     </select>
@@ -96,12 +97,12 @@
                         <tbody>
                         {% for control in controls %}
                         <tr data-device="{{ control.device|lower }}">
-                            <td>{{ control.timestamp }}</td>
-                            <td>{{ control.device }}</td>
+                            <td>{{ control.timestamp or 'N/A' }}</td>
+                            <td>{{ control.device|capitalize }}</td>
                             <td>
-                            <span class="badge {% if control.status %}bg-success{% else %}bg-danger{% endif %}">
-                                {{ 'On' if control.status else 'Off'}}
-                            </span>
+                                <span class="badge {% if control.status %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ 'On' if control.status else 'Off' }}
+                                </span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -111,7 +112,6 @@
             </div>
         </div>
     </div>
-
 
     <div class="tab-pane fade" id="stats" role="tabpanel">
         <div class="row g-3">
@@ -142,15 +142,15 @@
         </div>
     </div>
 </div>
+
 <script>
     let selectedDevice = null;
 
     function onDeviceChange() {
         const select = document.getElementById("deviceSelect");
         selectedDevice = select.value;
+        const controlButtons = document.getElementById("controlButtons");
 
-        // control btn
-        document.getElementById("controlButtons").classList.remove("d-none");
         if (selectedDevice === "__none__") {
             controlButtons.classList.add("d-none");
         } else {
@@ -158,24 +158,45 @@
         }
     }
 
-    function toggleDevice(state) {
-        if (selectedDevice === "__none__") return;
-        // API
-        controlDevice(selectedDevice, state);
-    }
+    async function toggleDevice(state) {
+        if (selectedDevice === "__none__") {
+            alert("Please select a device!");
+            return;
+        }
 
-    async function controlDevice(device, state) {
-        const response = await fetch('/api/control', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ device, state })
-        });
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            alert('Lỗi khi điều khiển thiết bị');
+        try {
+            const response = await fetch('/api/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    device: selectedDevice,
+                    state: state,
+                    mode: 'manual' // Gửi mode=manual để đồng bộ với ESP32
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                // Cập nhật trạng thái trên giao diện mà không reload
+                const rows = document.querySelectorAll(`#controlHistoryTable tr[data-device="${selectedDevice}"]`);
+                if (rows.length > 0) {
+                    const badge = rows[0].querySelector('.badge');
+                    badge.textContent = state ? 'On' : 'Off';
+                    badge.className = `badge ${state ? 'bg-success' : 'bg-danger'}`;
+                    rows[0].querySelector('td:first-child').textContent = new Date().toLocaleString();
+                }
+                // Cập nhật select option
+                const selectOption = document.querySelector(`#deviceSelect option[value="${selectedDevice}"]`);
+                selectOption.textContent = `${selectedDevice.charAt(0).toUpperCase() + selectedDevice.slice(1)} - ${state ? 'On' : 'Off'}`;
+                alert(`Device ${selectedDevice} turned ${state ? 'on' : 'off'} successfully!`);
+            } else {
+                alert(`Error: ${result.error || 'Failed to control device'}`);
+            }
+        } catch (error) {
+            console.error('Error controlling device:', error);
+            alert('Error: Unable to connect to server');
         }
     }
 </script>
